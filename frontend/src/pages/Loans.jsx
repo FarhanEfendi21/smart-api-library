@@ -2,7 +2,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import useSWR from 'swr';
 import { fetcher } from '../utils/fetcher';
-import { Plus, Search, CheckCircle2, CircleDashed, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Search, CheckCircle2, CircleDashed, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import Modal from '../components/Modal';
 
 const Loans = () => {
@@ -17,6 +17,7 @@ const Loans = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [returningId, setReturningId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   
   const [formData, setFormData] = useState({
     book_id: '',
@@ -50,6 +51,25 @@ const Loans = () => {
       alert("Error returning book: " + (err.response?.data?.error || err.message));
     } finally {
       setReturningId(null);
+    }
+  };
+
+  const handleDelete = async (loanId, loanTitle) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete this loan?\n\nBook: ${loanTitle}\n\nThis action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+
+    setDeletingId(loanId);
+    try {
+      await axios.delete(`http://localhost:3000/api/loans/${loanId}`);
+      mutateLoans(); // Refresh loans cache instantly
+      mutateDashboard(); // Refresh books cache instantly
+    } catch (err) {
+      alert("Error deleting loan: " + (err.response?.data?.error || err.message));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -100,18 +120,20 @@ const Loans = () => {
                 <tr className="bg-primary/5 text-primary/60 text-xs uppercase tracking-wider font-semibold">
                   <th className="px-6 py-4">Book</th>
                   <th className="px-6 py-4">Borrower</th>
-                  <th className="px-6 py-4">Dates</th>
+                  <th className="px-6 py-4">Loan Date</th>
+                  <th className="px-6 py-4">Due Date</th>
                   <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-primary/5">
                 {loans.map(loan => (
                   <tr key={loan.id} className="hover:bg-primary/[0.02] transition-colors group">
                     <td className="px-6 py-4">
-                      <p className="font-medium text-primary">{loan.member_name}</p>
+                      <p className="font-medium text-primary">{loan.book_title || 'Unknown'}</p>
                     </td>
                     <td className="px-6 py-4 text-sm text-primary/80">
-                      {loan.book_title}
+                      {loan.member_name || 'Unknown'}
                     </td>
                     <td className="px-6 py-4 text-sm text-primary/70">
                       {new Date(loan.loan_date).toLocaleDateString()}
@@ -123,16 +145,27 @@ const Loans = () => {
                       {getStatusBadge(loan.status)}
                     </td>
                     <td className="px-6 py-4">
-                      {loan.status === 'BORROWED' && (
+                      <div className="flex items-center gap-2">
+                        {loan.status === 'BORROWED' && (
+                          <button 
+                            onClick={() => handleReturn(loan.id)}
+                            disabled={returningId === loan.id || deletingId === loan.id}
+                            className="text-xs bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {returningId === loan.id ? <Loader2 className="w-3 h-3 animate-spin"/> : <RefreshCw className="w-3 h-3"/>}
+                            Return
+                          </button>
+                        )}
                         <button 
-                          onClick={() => handleReturn(loan.id)}
-                          disabled={returningId === loan.id}
-                          className="text-xs bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50 flex items-center gap-1"
+                          onClick={() => handleDelete(loan.id, loan.book_title || 'Unknown')}
+                          disabled={deletingId === loan.id || returningId === loan.id}
+                          className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50 flex items-center gap-1"
+                          title="Delete loan permanently"
                         >
-                          {returningId === loan.id ? <Loader2 className="w-3 h-3 animate-spin"/> : <RefreshCw className="w-3 h-3"/>}
-                          Return
+                          {deletingId === loan.id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Trash2 className="w-3 h-3"/>}
+                          Delete
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
