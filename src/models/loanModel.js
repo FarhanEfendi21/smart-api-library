@@ -36,8 +36,8 @@ export const LoanModel = {
     const query = `
       SELECT l.*, b.title as book_title, m.full_name as member_name 
       FROM loans l
-      JOIN books b ON l.book_id = b.id
-      JOIN members m ON l.member_id = m.id
+      LEFT JOIN books b ON l.book_id = b.id
+      LEFT JOIN members m ON l.member_id = m.id
       ORDER BY l.loan_date DESC
     `;
     const result = await pool.query(query);
