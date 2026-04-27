@@ -38,8 +38,63 @@ export const LoanModel = {
       FROM loans l
       JOIN books b ON l.book_id = b.id
       JOIN members m ON l.member_id = m.id
+      ORDER BY l.loan_date DESC
     `;
     const result = await pool.query(query);
     return result.rows;
+  },
+
+  async returnLoan(id) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const loanCheck = await client.query('SELECT * FROM loans WHERE id = $1', [id]);
+      if (loanCheck.rows.length === 0) throw new Error('Loan not found');
+      if (loanCheck.rows[0].status === 'RETURNED') throw new Error('Already returned');
+
+      const book_id = loanCheck.rows[0].book_id;
+
+      // Update status and return_date
+      const updateLoan = await client.query(`
+        UPDATE loans SET status = 'RETURNED', return_date = CURRENT_DATE
+        WHERE id = $1 RETURNING *
+      `, [id]);
+
+      // Increase book available_copies
+      await client.query('UPDATE books SET available_copies = available_copies + 1 WHERE id = $1', [book_id]);
+
+      await client.query('COMMIT');
+      return updateLoan.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async delete(id) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const loanCheck = await client.query('SELECT * FROM loans WHERE id = $1', [id]);
+      if (loanCheck.rows.length === 0) throw new Error('Loan not found');
+      
+      const loan = loanCheck.rows[0];
+      // If deleting a loan that is still borrowed or overdue, restore the book copy
+      if (loan.status === 'BORROWED' || loan.status === 'OVERDUE') {
+        await client.query('UPDATE books SET available_copies = available_copies + 1 WHERE id = $1', [loan.book_id]);
+      }
+
+      await client.query('DELETE FROM loans WHERE id = $1', [id]);
+      await client.query('COMMIT');
+      return { message: "Loan deleted successfully" };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 };

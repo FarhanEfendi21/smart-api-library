@@ -22,5 +22,25 @@ export const LoanController = {
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
+  },
+
+  async returnLoan(req, res) {
+    const { id } = req.params;
+    try {
+      const updatedLoan = await LoanModel.returnLoan(id);
+      res.json({ message: "Buku berhasil dikembalikan", data: updatedLoan });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  },
+
+  async deleteLoan(req, res) {
+    const { id } = req.params;
+    try {
+      await LoanModel.delete(id);
+      res.json({ message: "Peminjaman berhasil dihapus" });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 };
